@@ -28,10 +28,8 @@ public:
         doSendMesh = false;
         imageFileBuffer = ofBufferFromFile("bikers.jpg");
         
-       // mesh.setMode(OF_PRIMITIVE_POINTS);
-        //mesh.enableColors();
         
-        sphere.set(500, 500, OF_PRIMITIVE_TRIANGLES);
+        sphere.set(10, 10, OF_PRIMITIVE_TRIANGLES);
         mesh = sphere.getMesh();
        
         for(size_t i=0; i<mesh.getVertices().size(); i++)

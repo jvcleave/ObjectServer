@@ -155,8 +155,6 @@ public:
         
     }
  
-    
-    
     ofBuffer getBuffer(ofMesh& mesh)
     {
         ofBuffer buffer;
@@ -185,108 +183,172 @@ public:
         
     }
 
-    ofMesh* getMeshPointer(ofBuffer& buffer)
+    ofMesh* getMesh(ofBuffer& buffer)
     {
         ofMesh* mesh = new ofMesh();
-        int numVerts = getValue(buffer, NUM_VERTS_BEGIN, NUM_VERTS_END);
-        fillVector<ofVec3f>(mesh->getVertices(), buffer, numVerts, VERTS_VALUES_BEGIN, VERTS_VALUES_END);
+        int numVerts = getValue(buffer,
+                                NUM_VERTS_BEGIN,
+                                NUM_VERTS_END);
         
-        int numNormals = getValue(buffer, NUM_NORMALS_BEGIN, NUM_NORMALS_END);
-        fillVector<ofVec3f>(mesh->getNormals(), buffer, numNormals, NORMALS_VALUES_BEGIN, NORMALS_VALUES_END);
+        fillVector<ofVec3f>(mesh->getVertices(),
+                            buffer,
+                            numVerts,
+                            VERTS_VALUES_BEGIN, VERTS_VALUES_END);
         
-        int numIndicies = getValue(buffer, NUM_INDICES_BEGIN, NUM_INDICES_END);
-        fillVector<ofIndexType>(mesh->getIndices(), buffer, numIndicies, INDICES_VALUES_BEGIN, INDICES_VALUES_END);
+        int numNormals = getValue(buffer,
+                                  NUM_NORMALS_BEGIN, NUM_NORMALS_END);
         
-        int numColors = getValue(buffer, NUM_COLORS_BEGIN, NUM_COLORS_END);
-        fillVector<ofFloatColor>(mesh->getColors(), buffer, numColors, COLOR_VALUES_BEGIN, COLOR_VALUES_END);
+        fillVector<ofVec3f>(mesh->getNormals(),
+                            buffer,
+                            numNormals,
+                            NORMALS_VALUES_BEGIN, NORMALS_VALUES_END);
+        
+        int numIndicies = getValue(buffer,
+                                   NUM_INDICES_BEGIN, NUM_INDICES_END);
+        fillVector<ofIndexType>(mesh->getIndices(),
+                                buffer,
+                                numIndicies,
+                                INDICES_VALUES_BEGIN, INDICES_VALUES_END);
+        
+        int numColors = getValue(buffer,
+                                 NUM_COLORS_BEGIN, NUM_COLORS_END);
+        fillVector<ofFloatColor>(mesh->getColors(),
+                                 buffer,
+                                 numColors,
+                                 COLOR_VALUES_BEGIN, COLOR_VALUES_END);
         return mesh;
     }
     
-    ofMesh getMesh(ofBuffer& buffer)
+};
+
+
+class TCPMessageThread : public ofThread
+{
+public:
+    ofxTCPServer* server;
+    ofBuffer buffer;
+    bool doAbort;
+    bool didSend;
+    TCPMessageThread()
     {
-        ofMesh mesh;
-        int numVerts = getValue(buffer, NUM_VERTS_BEGIN, NUM_VERTS_END);
-        fillVector<ofVec3f>(mesh.getVertices(), buffer, numVerts, VERTS_VALUES_BEGIN, VERTS_VALUES_END);
+        server = NULL;
+        doAbort = false;
+        didSend = false;
+    }
+    ~TCPMessageThread()
+    {
+        ofLogVerbose() << "~TCPMessageThread";
+        server = NULL;
+    }
+    void setup(ofxTCPServer* server_, ofBuffer buffer_)
+    {
+        server = server_;
+        buffer = buffer_;
         
-        int numNormals = getValue(buffer, NUM_NORMALS_BEGIN, NUM_NORMALS_END);
-        fillVector<ofVec3f>(mesh.getNormals(), buffer, numNormals, NORMALS_VALUES_BEGIN, NORMALS_VALUES_END);
-        
-        int numIndicies = getValue(buffer, NUM_INDICES_BEGIN, NUM_INDICES_END);
-        fillVector<ofIndexType>(mesh.getIndices(), buffer, numIndicies, INDICES_VALUES_BEGIN, INDICES_VALUES_END);
-        
-        int numColors = getValue(buffer, NUM_COLORS_BEGIN, NUM_COLORS_END);
-        fillVector<ofFloatColor>(mesh.getColors(), buffer, numColors, COLOR_VALUES_BEGIN, COLOR_VALUES_END);
-        
-        
-        return mesh;
+    }
+    void send()
+    {
+        startThread();
+    }
+    void threadedFunction()
+    {
+        while(!doAbort)
+        {
+            for(int i = 0; i < server->getLastID(); i++)
+            {
+                if( server->isClientConnected(i) )
+                {
+                    didSend = server->sendRawBytes(i, (const char *)buffer.getData(), buffer.size());
+                    if(didSend)
+                    {
+                        ofLogVerbose() << "didSend: " << didSend << " buffer->size(): " << buffer.size() << "server->getNumReceivedBytes(i): " << server->getNumReceivedBytes(i);
+                        doAbort = true;
+                    }else
+                    {
+                        ofLogError() << "FAILED" << server->getNumReceivedBytes(i);
+                        doAbort = true;
+                    }
+                }
+            }
+        }
+        stopThread();
     }
 };
 
-class ofxTCPObjects
+class ofxTCPObjects : public ofThread
 {
 public:
     
-    ofxTCPServer imageSender;
+    ofxTCPServer imageServer;
     ofxTCPClient imageReceiver;
     
     
     ofxTCPServer meshServer;
     ofxTCPClient meshReceiver;
-    
+    vector<TCPMessageThread*> messages;
     ofxTCPObjects()
     {
 
-
+        
     }
-    
-    int findDelimiter(char * data, int size, string delimiter)
+    void threadedFunction()
     {
-        unsigned int posInDelimiter=0;
-        for(int i=0; i<size; i++)
+        while(isThreadRunning())
         {
-            if(data[i]==delimiter[posInDelimiter])
+            for(int i = 0; i < messages.size(); i++)
             {
-                posInDelimiter++;
-                if(posInDelimiter==delimiter.size())
+                if(!messages[i]->isThreadRunning() && messages[i]->didSend)
                 {
-                     return i-delimiter.size()+1;
+                    //ofLogVerbose() << "message should be deleted: " << i;
+                    TCPMessageThread* instance = messages[i];
+                    messages.erase (messages.begin()+i);
+                    delete instance;
+                    
                 }
-            }else
-            {
-                posInDelimiter=0;
             }
         }
-        return -1;
+        stopThread();
     }
-    
-    
     void sendImage(ofBuffer& imageFileBuffer)
     {
-        for(int i = 0; i < imageSender.getLastID(); i++)
+        
+        TCPMessageThread* message = new TCPMessageThread();
+        message->setup(&imageServer, imageFileBuffer);
+        sendMessage(message);
+        /*
+        
+        for(int i = 0; i < imageServer.getLastID(); i++)
         {
-            if( imageSender.isClientConnected(i) )
+            if( imageServer.isClientConnected(i) )
             {
-                bool didSendImage = imageSender.sendRawBytes(i, (const char *)imageFileBuffer.getData(), imageFileBuffer.size());
+                bool didSendImage = imageServer.sendRawBytes(i, (const char *)imageFileBuffer.getData(), imageFileBuffer.size());
                 ofLogVerbose() << "didSendImage: " << didSendImage;
                 
+                int numReceivedBytes = imageServer.getNumReceivedBytes(i);
+                ofLogVerbose() << "imageServer numReceivedBytes: " << numReceivedBytes;
+                
             }
-        }
+        }*/
     }
+    
+    void sendMessage(TCPMessageThread* message)
+    {
+        if(!isThreadRunning())
+        {
+            startThread();
+        }
+        messages.push_back(message);
+        message->send();
+    }
+    
     void sendMesh(ofMesh& mesh)
     {
         
         MeshBuffer meshBufferObject;
         ofBuffer meshBuffer = meshBufferObject.getBuffer(mesh);
-        for(int i = 0; i < meshServer.getLastID(); i++)
-        {
-            if( meshServer.isClientConnected(i) )
-            {
-                bool didSendMesh = meshServer.sendRawBytes(i, (const char *)meshBuffer.getData(), meshBuffer.size());
-                ofLogVerbose() << "didSendMesh: " << didSendMesh << " meshBuffer.size(): " << meshBuffer.size();
-                
-            }
-        }
-        
+        TCPMessageThread* message = new TCPMessageThread();
+        message->setup(&meshServer, meshBuffer);
+        sendMessage(message);        
     }
     void createImageClient()
     {
@@ -294,7 +356,7 @@ public:
     }
     void createImageServer()
     {
-        imageSender.setup(11999);
+        imageServer.setup(11999, true);
     }
     
     void createMeshClient()
@@ -310,17 +372,17 @@ public:
     string getImageServerInfo()
     {
         stringstream info;
-        info << "Image Server port: " << imageSender.getPort() << endl;
+        info << "Image Server port: " << imageServer.getPort() << endl;
         info << "CLIENTS" << endl;
-        for(size_t i = 0; i <imageSender.getLastID(); i++)
+        for(size_t i = 0; i <imageServer.getLastID(); i++)
         {
             
-            if( imageSender.isClientConnected(i) )
+            if( imageServer.isClientConnected(i) )
             {
                 
                 // get the ip and port of the client
-                string port = ofToString( imageSender.getClientPort(i) );
-                string ip   = imageSender.getClientIP(i);
+                string port = ofToString( imageServer.getClientPort(i) );
+                string ip   = imageServer.getClientIP(i);
                 
                 info << i << " port: " << port << " ip: " << ip  << endl;
             }
@@ -359,6 +421,7 @@ public:
     {
         receiveBuffer->append(localBuffer, bytes);
         localBuffer = NULL;
+        delete[] localBuffer;
         ofLogVerbose() << "bytes: " << bytes;
         
     }
@@ -414,23 +477,7 @@ public:
         ofLogVerbose() << "totalBytes: " << totalBytes;
         
         MeshBuffer meshBufferObject;
-        return meshBufferObject.getMeshPointer(receiveBuffer);
-#if 0
-        MeshBuffer meshBufferObject;
-        uint64_t startTime = ofGetElapsedTimeMillis();
-        ofMesh meshResults = meshBufferObject.getMesh(receiveBuffer);
-        uint64_t endTime = ofGetElapsedTimeMillis();
-        ofLogVerbose() << "meshResults TIME: " << endTime-startTime;
-        startTime = ofGetElapsedTimeMillis();
-        ofMesh* m = new ofMesh(meshResults);
-        endTime = ofGetElapsedTimeMillis();
-        ofLogVerbose() << "mesh ctor TIME: " << endTime-startTime;
-        startTime = ofGetElapsedTimeMillis();
-        ofBufferToFile("receiveBuffer.file", receiveBuffer, true);
-        endTime = ofGetElapsedTimeMillis();
-        ofLogVerbose() << "fileWrite TIME: " << endTime-startTime;
-#endif
-        //return m;
+        return meshBufferObject.getMesh(receiveBuffer);
 
     }
     

@@ -28,15 +28,15 @@ void ofApp::update()
 
 void ofApp::draw()
 {
-    /*
+    
      int x=0;
      for(size_t i=0; i<images.size(); i++)
      {
-     ofImage& image = images[i];
-     image.draw(x, 0, image.getWidth(), image.getHeight());
-     x+=image.getWidth();
+         ofImage& image = images[i];
+         image.draw(x, 0, image.getWidth(), image.getHeight());
+         x+=image.getWidth();
      }
-     */
+    
     stringstream info;
     cam.begin();
     
