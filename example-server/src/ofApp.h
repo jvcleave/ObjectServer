@@ -29,7 +29,7 @@ public:
         imageFileBuffer = ofBufferFromFile("bikers.jpg");
         
         
-        sphere.set(10, 10, OF_PRIMITIVE_TRIANGLES);
+        sphere.set(500, 500, OF_PRIMITIVE_TRIANGLES);
         mesh = sphere.getMesh();
        
         for(size_t i=0; i<mesh.getVertices().size(); i++)
