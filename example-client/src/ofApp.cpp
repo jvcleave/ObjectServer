@@ -4,8 +4,8 @@
 void ofApp::setup()
 {
     ofSetLogLevel(OF_LOG_VERBOSE);
-    tcpHelper.createImageClient();
-    tcpHelper.createMeshClient();
+    tcpHelper.createImageClient("JVCTOWER.local");
+    tcpHelper.createMeshClient("JVCTOWER.local");
     cam.setDistance(20);
 }
 

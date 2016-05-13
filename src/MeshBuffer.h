@@ -43,10 +43,10 @@ public:
         
     }
     
-    int findDelimiter(ofBuffer& inputBuffer, string delimiter)
+    int findDelimiter(ofBuffer* inputBuffer, string delimiter)
     {
-        char * data = (char *)inputBuffer.getData();
-        int size = inputBuffer.size();
+        char * data = (char *)inputBuffer->getData();
+        int size = inputBuffer->size();
         
         unsigned int posInDelimiter=0;
         for(int i=0; i<size; i++)
@@ -67,21 +67,21 @@ public:
     }
     
     
-    int getValue(ofBuffer& buffer, string openTag, string closeTag)
+    int getValue(ofBuffer* buffer, string openTag, string closeTag)
     {
-        unsigned char * data = (unsigned char *)buffer.getData();
+        unsigned char * data = (unsigned char *)buffer->getData();
         int start = findDelimiter(buffer, openTag);
         if(start < 0)
         {
             ofLogError() << openTag << " NOT FOUND";
-            return;
+            return start;
         }
         
         int end = findDelimiter(buffer, closeTag);
         if(end < 0)
         {
             ofLogError() << closeTag << " NOT FOUND";
-            return;
+            return end;
         }
         
         int startPos = start+openTag.length();
@@ -102,9 +102,9 @@ public:
     }
     
     template<typename T>
-    void fillVector(vector<T>& targetCollection, ofBuffer& buffer, int numObjects, string openTag, string closeTag)
+    void fillVector(vector<T>& targetCollection, ofBuffer* buffer, int numObjects, string openTag, string closeTag)
     {
-        unsigned char * data = (unsigned char *)buffer.getData();
+        unsigned char * data = (unsigned char *)buffer->getData();
         int start = findDelimiter(buffer, openTag);
         if(start < 0)
         {
@@ -131,6 +131,36 @@ public:
         }
     }
     
+    void fillIndices(vector<ofIndexType>& targetCollection, ofBuffer* buffer, int numObjects, string openTag, string closeTag)
+    {
+        unsigned char * data = (unsigned char *)buffer->getData();
+        int start = findDelimiter(buffer, openTag);
+        if(start < 0)
+        {
+            ofLogError() << openTag << " NOT FOUND";
+            return;
+        }
+        int end = findDelimiter(buffer, closeTag);
+        if(end < 0)
+        {
+            ofLogError() << closeTag << " NOT FOUND";
+            return;
+        }
+        
+        int startPos = start+openTag.length();
+        data+=startPos;
+        int counter = startPos;
+        int stepSize = sizeof(unsigned int);
+        for(int i=0; i<numObjects; i++)
+        {
+            ofIndexType value;
+            unsigned int sourceValue;
+            memcpy(&sourceValue, data, stepSize);
+            data+=stepSize;
+            targetCollection.push_back((ofIndexType)sourceValue);
+        }
+    }
+
     
     template<typename T>
     void addTags(vector<T>& source, ofBuffer& buffer,
@@ -182,7 +212,7 @@ public:
         
     }
     
-    ofMesh* getMesh(ofBuffer& buffer)
+    ofMesh* getMesh(ofBuffer* buffer)
     {
         ofMesh* mesh = new ofMesh();
         int numVerts = getValue(buffer,
@@ -204,10 +234,17 @@ public:
         
         int numIndicies = getValue(buffer,
                                    NUM_INDICES_BEGIN, NUM_INDICES_END);
+#if (!defined(TARGET_RASPBERRY_PI))
         fillVector<ofIndexType>(mesh->getIndices(),
                                 buffer,
                                 numIndicies,
                                 INDICES_VALUES_BEGIN, INDICES_VALUES_END);
+#else
+        fillIndices(mesh->getIndices(),
+                                buffer,
+                                numIndicies,
+                                INDICES_VALUES_BEGIN, INDICES_VALUES_END);
+#endif
         
         int numColors = getValue(buffer,
                                  NUM_COLORS_BEGIN, NUM_COLORS_END);

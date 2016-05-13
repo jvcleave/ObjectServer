@@ -72,7 +72,7 @@ public:
     vector<TCPMessageThread*> messages;
     ofxTCPObjects()
     {
-
+        
         
     }
     void threadedFunction()
@@ -159,7 +159,7 @@ public:
             }
         }
         return info.str();
-
+        
     }
     
     string getMeshServerInfo()
@@ -181,7 +181,7 @@ public:
             }
         }
         return info.str();
-
+        
     }
     char * getLocalBuffer(int amount=512)
     {
@@ -226,7 +226,7 @@ public:
     
     ofMesh* getMesh()
     {
-        ofBuffer receiveBuffer;
+        ofBuffer* receiveBuffer = new ofBuffer();
         int totalBytes=0;
         if(meshReceiver.isConnected())
         {
@@ -234,14 +234,14 @@ public:
             
             char * localBuffer;
             bool isFinished = false;
-            while((bytes = meshReceiver.receiveRawBytes((localBuffer = getLocalBuffer(0)), 512)) > 0)
+            while((bytes = meshReceiver.receiveRawBytes((localBuffer = getLocalBuffer()), 512)) > 0)
             {
-                appendAndDelete(localBuffer, &receiveBuffer, bytes);
+                appendAndDelete(localBuffer, receiveBuffer, bytes);
                 totalBytes+=bytes;
                 
             }
         }
-        if(receiveBuffer.size() == 0)
+        if(receiveBuffer->size() == 0)
         {
             return NULL;
         }
@@ -249,7 +249,7 @@ public:
         
         MeshBuffer meshBufferObject;
         return meshBufferObject.getMesh(receiveBuffer);
-
+        
     }
     
 };
